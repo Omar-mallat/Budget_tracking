@@ -35,4 +35,4 @@ router.get("/transaction/:userId",async(req,res)=>{
         res.status(500).json({error:"server error"});
     }
 })
-module.exports = router
+module.exports = router;

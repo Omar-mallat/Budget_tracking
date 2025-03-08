@@ -14,8 +14,8 @@ const RecentTransactions = ({ transactions }) => {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((transaction) => (
-              <tr key={transaction.id} className="border-b">
+            {transactions.map((transaction,index) => (
+              <tr key={index} className="border-b">
                 <td className="py-2 px-4">{transaction.date}</td>
                 <td className="py-2 px-4">{transaction.description}</td>
                 <td className={`py-2 px-4 text-right font-bold ${transaction.type === "income" ? "text-green-500" : "text-red-500"}`}>
