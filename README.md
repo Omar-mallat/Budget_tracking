@@ -50,7 +50,6 @@ A full-stack web application for tracking income and expenses, providing users w
 **Visualization & Tools:**  
 - Recharts or Chart.js  
 - Postman for API testing  
-- ESLint for code quality
 
 ---
 
@@ -74,13 +73,12 @@ A full-stack web application for tracking income and expenses, providing users w
    Create a `.env` file in the `backend` directory:
 
    ```env
-   PORT=5000
-   DB_USER=your_db_user
-   DB_HOST=localhost
-   DB_NAME=budget_tracking
-   DB_PASSWORD=your_db_password
-   DB_PORT=5432
-   JWT_SECRET=your_jwt_secret
+   user: 'postgres',
+  password: 'root',
+  host: 'localhost',
+  port: 5432,
+  database: 'budget_tracking',
+  JWT_SECRET=your_super_secret_key
    ```
 
 4. **Set up the PostgreSQL database:**
@@ -92,7 +90,7 @@ A full-stack web application for tracking income and expenses, providing users w
 
 5. **Start the backend server:**
    ```bash
-   npm start
+  node server.js
    ```
 
 ---
