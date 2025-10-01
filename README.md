@@ -48,7 +48,7 @@ A full-stack web application for tracking income and expenses, providing users w
 - bcrypt for password hashing
 
 **Visualization & Tools:**  
-- Recharts or Chart.js  
+- Chart.js  
 - Postman for API testing  
 
 ---
