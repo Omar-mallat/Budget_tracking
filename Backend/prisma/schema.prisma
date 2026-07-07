@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MEMBER
+  CHILD
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+// ─── Core User ─────────────────────────────────────────────────────────────────
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String?  @db.VarChar(100)
+  email     String   @unique @db.VarChar(100)
+  password  String   @db.VarChar(255)
+  pushToken String?  @db.VarChar(255)
+  createdAt DateTime @default(now())
+
+  // Legacy relations (kept for backwards compat during migration)
+  expenses     Expense[]
+  incomes      Income[]
+  budgetLimits BudgetLimit[]
+
+  // New relations
+  familiesOwned    Family[]       @relation("FamilyOwner")
+  familyMemberships FamilyMember[]
+  transactions     Transaction[]
+  notifications    Notification[]
+
+  @@map("users")
+}
+
+// ─── Family Workspace ─────────────────────────────────────────────────────────
+
+model Family {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  ownerId   Int
+  createdAt DateTime @default(now())
+
+  owner        User          @relation("FamilyOwner", fields: [ownerId], references: [id])
+  members      FamilyMember[]
+  transactions Transaction[]
+  budgets      Budget[]
+  savingsGoals SavingsGoal[]
+  bills        Bill[]
+  categories   Category[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id       Int  @id @default(autoincrement())
+  familyId Int
+  userId   Int
+  role     Role @default(MEMBER)
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@map("family_members")
+}
+
+// ─── Unified Transaction (replaces split Expense / Income) ────────────────────
+
+model Transaction {
+  id            Int             @id @default(autoincrement())
+  userId        Int
+  familyId      Int?
+  type          TransactionType
+  amount        Decimal         @db.Decimal(10, 2)
+  category      String          @db.VarChar(50)
+  description   String?
+  date          DateTime        @db.Date
+  paymentMethod String?         @db.VarChar(30)
+  createdAt     DateTime        @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+
+  @@map("transactions")
+}
+
+// ─── Category (family-scoped, nullable = system default) ─────────────────────
+
+model Category {
+  id       Int    @id @default(autoincrement())
+  familyId Int?
+  name     String @db.VarChar(50)
+
+  family  Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  budgets Budget[]
+
+  @@map("categories")
+}
+
+// ─── Budget (monthly, family-scoped) ─────────────────────────────────────────
+
+model Budget {
+  id          Int     @id @default(autoincrement())
+  familyId    Int
+  categoryId  Int?
+  month       String  @db.VarChar(7)  // "YYYY-MM"
+  limitAmount Decimal @db.Decimal(10, 2)
+
+  family   Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([familyId, month, categoryId])
+  @@map("budgets")
+}
+
+// ─── Savings Goal ─────────────────────────────────────────────────────────────
+
+model SavingsGoal {
+  id            Int       @id @default(autoincrement())
+  familyId      Int
+  title         String    @db.VarChar(100)
+  targetAmount  Decimal   @db.Decimal(10, 2)
+  currentAmount Decimal   @default(0) @db.Decimal(10, 2)
+  deadline      DateTime? @db.Date
+  createdAt     DateTime  @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("savings_goals")
+}
+
+// ─── Bill ─────────────────────────────────────────────────────────────────────
+
+model Bill {
+  id       Int        @id @default(autoincrement())
+  familyId Int
+  title    String     @db.VarChar(100)
+  amount   Decimal    @db.Decimal(10, 2)
+  dueDate  DateTime   @db.Date
+  status   BillStatus @default(PENDING)
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@map("bills")
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ─── Legacy models (kept during migration, will be retired) ───────────────────
+
+model Expense {
+  id              Int      @id @default(autoincrement())
+  user_id         Int?
+  title           String   @db.VarChar(100)
+  amount          Decimal  @db.Decimal(10, 2)
+  category        String?  @db.VarChar(50)
+  date            DateTime @db.Date
+  reference       String?
+  is_recurring    Boolean  @default(false)
+  recurrence_type String?  @db.VarChar(20)
+  user            User?    @relation(fields: [user_id], references: [id])
+
+  @@map("expenses")
+}
+
+model Income {
+  id              Int      @id @default(autoincrement())
+  user_id         Int?
+  title           String   @db.VarChar(100)
+  amount          Decimal  @db.Decimal(10, 2)
+  category        String?  @db.VarChar(50)
+  source          String?  @db.VarChar(100)
+  date            DateTime @db.Date
+  is_recurring    Boolean  @default(false)
+  recurrence_type String?  @db.VarChar(20)
+  user            User?    @relation(fields: [user_id], references: [id])
+
+  @@map("income")
+}
+
+model BudgetLimit {
+  id            Int     @id @default(autoincrement())
+  user_id       Int
+  category      String  @db.VarChar(50)
+  monthly_limit Decimal @db.Decimal(10, 2)
+  user          User    @relation(fields: [user_id], references: [id])
+
+  @@unique([user_id, category])
+  @@map("budget_limits")
+}

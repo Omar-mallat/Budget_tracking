@@ -1,81 +1,108 @@
 const router = require('express').Router();
 const bcrypt = require('bcrypt');
 const JWT = require("jsonwebtoken");
-const pool =require('../db');
+const prisma = require('../db');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-// Register route
+const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key';
+
 router.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: "All fields are required" });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ message: "Password must be at least 8 characters" });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ message: "Invalid email format" });
+  }
+
   try {
-    // Check if a user with the given email already exists
-    const userQuery = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
-    if (userQuery.rows.length > 0) {
-      return res.status(400).send("Email already exists!");
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ message: "An account with this email already exists" });
     }
-    
-    // Hash the password
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Insert the new user into the database
-    const insertQuery = await pool.query(
-      "INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *",
-      [name, email, hashedPassword]
-    );
-    const newUser = insertQuery.rows[0];
-    
-    // Generate a JWT token
+
+    const newUser = await prisma.user.create({
+      data: { name, email, password: hashedPassword },
+      select: { id: true, name: true, email: true },
+    });
+
     const token = JWT.sign(
       { userId: newUser.id, email: newUser.email },
-      process.env.JWT_SECRET || 'default_secret',
+      JWT_SECRET,
       { expiresIn: '1h' }
     );
-    
-    console.log("New user added:", newUser);
-    res.status(201).json({
-      message: "Registered successfully!",
-      token,
-      user: newUser
-    });
+
+    console.log("New user registered:", newUser.email);
+
+    res.status(201).json({ message: "Registered successfully!", token, user: newUser });
   } catch (err) {
     console.error("Error in /register:", err.message);
-    res.status(500).send({ message: err.message });
+    res.status(500).json({ message: "Server error during registration" });
   }
 });
 
-// Login route
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "Email and password are required" });
+  }
+
   try {
-    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userResult.rows.length === 0) {
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    const user = userResult.rows[0];
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
-    } 
+    }
+
     const token = JWT.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET ||'default_secret_key',
-      { expiresIn: '1h'}
+      JWT_SECRET,
+      { expiresIn: '1h' }
     );
-
 
     res.status(200).json({
       message: 'Login successful',
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email
-      }
+      user: { id: user.id, name: user.name, email: user.email },
     });
-    
   } catch (err) {
-    res.status(500).send({ message: err.message });
+    console.error("Error in /login:", err.message);
+    res.status(500).json({ message: "Server error during login" });
+  }
+});
+
+// PUT /auth/push-token — save or clear Expo push token for the current user
+const authenticateToken = require('../middleware/auth');
+
+router.put('/push-token', authenticateToken, async (req, res) => {
+  const userId = req.user.userId;
+  const { token } = req.body;
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { pushToken: token ?? null },
+    });
+    res.json({ message: 'Push token saved' });
+  } catch (err) {
+    console.error('Error saving push token:', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
