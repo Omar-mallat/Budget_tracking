@@ -231,6 +231,7 @@ const Income = () => {
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Date</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Category</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Source</th>
+                    <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Earned By</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Recurring</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3 rounded-r-[12px]">Actions</th>
                   </tr>
@@ -247,6 +248,7 @@ const Income = () => {
                         </span>
                       </td>
                       <td className="p-3 text-center text-sm text-slate-400">{inc.source || "-"}</td>
+                      <td className="p-3 text-center text-sm text-slate-500">{inc.user?.name || "--"}</td>
                       <td className="p-3 text-center">
                         {inc.is_recurring ? (
                           <span className="text-xs font-bold px-3 py-1 rounded-full capitalize" style={{ backgroundColor: "#EEF2FF", color: "#4F46E5" }}>
@@ -255,12 +257,16 @@ const Income = () => {
                         ) : <span className="text-slate-300">--</span>}
                       </td>
                       <td className="p-3 text-center space-x-2">
-                        <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
-                          style={{ backgroundColor: "#818CF8" }}
-                          onClick={() => openEdit(inc)}>Edit</button>
-                        <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
-                          style={{ backgroundColor: "#EF4444" }}
-                          onClick={() => handleDeleteIncome(inc.id)}>Delete</button>
+                        {inc.canEdit !== false && (
+                          <>
+                            <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
+                              style={{ backgroundColor: "#818CF8" }}
+                              onClick={() => openEdit(inc)}>Edit</button>
+                            <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
+                              style={{ backgroundColor: "#EF4444" }}
+                              onClick={() => handleDeleteIncome(inc.id)}>Delete</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

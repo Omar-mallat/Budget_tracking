@@ -19,6 +19,7 @@ const Sidebar = () => {
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [members, setMembers] = useState([]);
 
   useEffect(() => {
     api.get("/notifications/unread-count")
@@ -26,10 +27,16 @@ const Sidebar = () => {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    api.get("/families")
+      .then((res) => setMembers(res.data[0]?.members || []))
+      .catch(() => {});
+  }, []);
+
   const handleSignOut = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/");
+    navigate("/login");
   };
 
   const initials = (user.name || "U").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -56,21 +63,29 @@ const Sidebar = () => {
           Our Family Team
         </p>
         <div className="flex -space-x-2 items-center ml-2">
-          <div className="w-10 h-10 rounded-full border-4 flex items-center justify-center font-bold text-white text-sm shadow-sm"
-            style={{ backgroundColor: "#A8D5FF", borderColor: "#F5EFE7" }}
-            title={user.name || "You"}>
-            {initials}
-          </div>
-          {MEMBER_COLORS.slice(1).map((color, i) => (
-            <div key={i} className="w-10 h-10 rounded-full border-4 flex items-center justify-center font-bold text-white text-xs shadow-sm"
-              style={{ backgroundColor: color, borderColor: "#F5EFE7" }}>
-              {["M", "K1", "K2"][i]}
+          {members.length > 0 ? (
+            members.map((member, i) => {
+              const isMe = member.user.id === user.id;
+              const memberInitials = (member.user.name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+              return (
+                <div key={member.id} className="w-10 h-10 rounded-full border-4 flex items-center justify-center font-bold text-white text-xs shadow-sm"
+                  style={{ backgroundColor: MEMBER_COLORS[i % MEMBER_COLORS.length], borderColor: "#F5EFE7" }}
+                  title={isMe ? "You" : member.user.name}>
+                  {memberInitials}
+                </div>
+              );
+            })
+          ) : (
+            <div className="w-10 h-10 rounded-full border-4 flex items-center justify-center font-bold text-white text-sm shadow-sm"
+              style={{ backgroundColor: "#A8D5FF", borderColor: "#F5EFE7" }}
+              title={user.name || "You"}>
+              {initials}
             </div>
-          ))}
-          <div className="w-8 h-8 rounded-full border-4 flex items-center justify-center text-slate-500"
+          )}
+          <a href="/family" className="w-8 h-8 rounded-full border-4 flex items-center justify-center text-slate-500"
             style={{ backgroundColor: "#E8DFD2", borderColor: "#F5EFE7" }}>
             <span className="text-xs font-bold">+</span>
-          </div>
+          </a>
         </div>
       </div>
 

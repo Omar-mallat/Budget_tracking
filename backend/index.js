@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 
 const authRouter = require("./Auth/auth");
+const invitationsRouter = require('./routes/invitations');
 const authenticateToken = require('./middleware/auth');
 
 // Existing routes (legacy — scoped to current user via JWT)
@@ -32,6 +33,7 @@ app.use(morgan('dev'));
 
 // ─── Public Routes ─────────────────────────────────────────────────────────────
 app.use("/auth", authRouter);
+app.use("/invitations", invitationsRouter);
 
 // ─── Protected Routes (JWT required) ──────────────────────────────────────────
 app.use('/dashboard',      authenticateToken, dashboardRouter);

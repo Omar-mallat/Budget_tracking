@@ -1,6 +1,7 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const prisma = require('../db');
-const { notifyUsers } = require('../utils/notify');
+const { sendInviteEmail } = require('../utils/email');
 
 // POST /families — create a new family; creator becomes ADMIN member
 router.post("/", async (req, res) => {
@@ -87,25 +88,45 @@ router.post("/:familyId/invite", async (req, res) => {
   try {
     const adminCheck = await prisma.familyMember.findFirst({
       where: { familyId, userId, role: 'ADMIN' },
+      include: { user: { select: { name: true } } },
     });
     if (!adminCheck) return res.status(403).json({ error: "Only admins can invite members" });
 
+    const family = await prisma.family.findUnique({ where: { id: familyId } });
+
     const invitee = await prisma.user.findUnique({ where: { email } });
-    if (!invitee) return res.status(404).json({ error: "No user found with that email" });
 
-    const existing = await prisma.familyMember.findFirst({
-      where: { familyId, userId: invitee.id },
+    if (invitee) {
+      const existing = await prisma.familyMember.findFirst({
+        where: { familyId, userId: invitee.id },
+      });
+      if (existing) return res.status(409).json({ error: "User is already a member" });
+    }
+
+    // Always invite by email — never add the member directly, even if they already have an account
+    const existingInvite = await prisma.invitation.findFirst({
+      where: { familyId, email, status: 'PENDING' },
     });
-    if (existing) return res.status(409).json({ error: "User is already a member" });
+    if (existingInvite) {
+      return res.status(409).json({ error: "An invitation is already pending for this email" });
+    }
 
-    const member = await prisma.familyMember.create({
-      data: { familyId, userId: invitee.id, role },
-      include: { user: { select: { id: true, name: true, email: true } } },
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const invitation = await prisma.invitation.create({
+      data: { email, familyId, role, token, expiresAt, invitedById: userId },
     });
 
-    await notifyUsers([invitee.id], `👨‍👩‍👧 You have been added to a family workspace.`);
+    await sendInviteEmail({
+      to: email,
+      inviterName: adminCheck.user.name || 'A family admin',
+      familyName: family.name,
+      role,
+      token,
+    });
 
-    res.status(201).json({ message: "Member added", member });
+    res.status(201).json({ message: "Invitation email sent", invitation: { id: invitation.id, email, role } });
   } catch (error) {
     console.error("Error inviting member:", error);
     res.status(500).json({ error: "Server error" });

@@ -244,6 +244,7 @@ const Dashboard = () => {
                           <p className="text-sm font-bold text-slate-800">{tx.title}</p>
                           <p className="text-[11px] font-bold" style={{ color: "#A89F91" }}>
                             {tx.date?.substring(0, 10)}
+                            {tx.addedBy && ` · ${isIncome ? "earned by" : "bought by"} ${tx.addedBy}`}
                           </p>
                         </div>
                       </div>

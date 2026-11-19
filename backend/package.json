@@ -24,6 +24,7 @@
     "morgan": "^1.10.0",
     "pg": "^8.13.3",
     "prisma": "^6.19.3",
+    "resend": "^6.18.0",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {

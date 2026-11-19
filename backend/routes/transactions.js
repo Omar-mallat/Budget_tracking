@@ -100,6 +100,60 @@ router.get("/summary", async (req, res) => {
   }
 });
 
+// Checks the category's monthly family budget if one is set, otherwise falls back
+// to the overall balance (total income - total expenses) in the same scope
+// (family-wide, or personal if no familyId). Returns an error string, or null if affordable.
+async function checkAffordability(scope, category, amount, date, excludeTransactionId = null) {
+  if (scope.familyId) {
+    const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const budget = await prisma.budget.findFirst({
+      where: { familyId: scope.familyId, month, category: { name: category } },
+    });
+
+    if (budget) {
+      const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+      const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      const agg = await prisma.transaction.aggregate({
+        where: {
+          familyId: scope.familyId,
+          type: 'EXPENSE',
+          category,
+          date: { gte: startOfMonth, lte: endOfMonth },
+          ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {}),
+        },
+        _sum: { amount: true },
+      });
+      const spent = Number(agg._sum.amount ?? 0);
+      const limit = Number(budget.limitAmount);
+      if (spent + amount > limit) {
+        return `This exceeds the family's monthly budget for ${category}: ${spent.toFixed(2)} already spent of ${limit.toFixed(2)} TND limit`;
+      }
+      return null;
+    }
+  }
+
+  const where = scope.familyId ? { familyId: scope.familyId } : { userId: scope.userId, familyId: null };
+  const [incomeAgg, expenseAgg] = await Promise.all([
+    prisma.transaction.aggregate({ where: { ...where, type: 'INCOME' }, _sum: { amount: true } }),
+    prisma.transaction.aggregate({
+      where: {
+        ...where,
+        type: 'EXPENSE',
+        ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {}),
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+  const totalIncome = Number(incomeAgg._sum.amount ?? 0);
+  const totalExpenses = Number(expenseAgg._sum.amount ?? 0);
+  const available = totalIncome - totalExpenses;
+
+  if (amount > available) {
+    return `Insufficient balance: ${available.toFixed(2)} TND available, this expense is ${amount.toFixed(2)} TND`;
+  }
+  return null;
+}
+
 // POST /transactions — create a new transaction
 router.post("/", async (req, res) => {
   const userId = req.user.userId;
@@ -130,6 +184,11 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    if (type === 'EXPENSE') {
+      const affordabilityError = await checkAffordability({ familyId: fid, userId }, category, parsedAmount, parsedDate);
+      if (affordabilityError) return res.status(400).json({ error: affordabilityError });
+    }
+
     const transaction = await prisma.transaction.create({
       data: {
         userId,
@@ -170,9 +229,25 @@ router.put("/:id", async (req, res) => {
     return res.status(400).json({ error: "amount must be a positive number" });
   }
 
+  const parsedDate = new Date(date);
+  if (isNaN(parsedDate.getTime())) {
+    return res.status(400).json({ error: "Invalid date format" });
+  }
+
   try {
     const existing = await prisma.transaction.findFirst({ where: { id, userId } });
     if (!existing) return res.status(404).json({ error: "Transaction not found" });
+
+    if (type === 'EXPENSE') {
+      const affordabilityError = await checkAffordability(
+        { familyId: existing.familyId, userId },
+        category,
+        parsedAmount,
+        parsedDate,
+        id
+      );
+      if (affordabilityError) return res.status(400).json({ error: affordabilityError });
+    }
 
     const transaction = await prisma.transaction.update({
       where: { id },
@@ -181,7 +256,7 @@ router.put("/:id", async (req, res) => {
         amount: parsedAmount,
         category,
         description: description ?? null,
-        date: new Date(date),
+        date: parsedDate,
         paymentMethod: paymentMethod ?? null,
       },
     });

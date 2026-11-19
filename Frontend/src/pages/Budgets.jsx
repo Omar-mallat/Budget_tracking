@@ -129,10 +129,12 @@ const Budgets = () => {
                         TND {item.spent.toFixed(2)} / TND {item.monthly_limit.toFixed(2)}
                       </span>
                       <span className={`text-sm font-bold ${colors.text}`}>{item.percentage}%</span>
-                      <button className="text-gray-400 hover:text-red-500 text-sm"
-                        onClick={() => handleDeleteLimit(item.id)}>
-                        Remove
-                      </button>
+                      {item.canEdit !== false && (
+                        <button className="text-gray-400 hover:text-red-500 text-sm"
+                          onClick={() => handleDeleteLimit(item.id)}>
+                          Remove
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">

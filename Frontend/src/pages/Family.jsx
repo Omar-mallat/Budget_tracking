@@ -71,7 +71,7 @@ const Family = () => {
     try {
       await api.post(`/families/${selectedFamily.id}/invite`, { email: inviteEmail, role: inviteRole });
       setInviteEmail("");
-      setInviteSuccess(`✅ ${inviteEmail} has been added to the family!`);
+      setInviteSuccess(`✅ Invitation sent to ${inviteEmail} — check your inbox link once they accept it.`);
       await refreshSelected();
     } catch (err) {
       setInviteError(err.response?.data?.error || "Failed to invite member");
@@ -297,7 +297,7 @@ const Family = () => {
                       Invite a Family Member ✉️
                     </h2>
                     <p className="text-sm font-medium mb-5" style={{ color: "#A89F91" }}>
-                      They need to have an account first. Enter their registered email below.
+                      Enter their email — if they don't have an account yet, we'll email them a link to create one.
                     </p>
 
                     <form onSubmit={handleInvite}>

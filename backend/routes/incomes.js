@@ -1,14 +1,17 @@
 const router = require('express').Router();
 const prisma = require('../db');
+const { getPrimaryFamily, canModify } = require('../utils/family');
 
 router.get("/", async (req, res) => {
   const userId = req.user.userId;
   try {
+    const membership = await getPrimaryFamily(userId);
     const incomes = await prisma.income.findMany({
-      where: { user_id: userId },
+      where: membership ? { familyId: membership.familyId } : { user_id: userId, familyId: null },
       orderBy: { date: 'desc' },
+      include: { user: { select: { id: true, name: true } } },
     });
-    res.json(incomes);
+    res.json(incomes.map(i => ({ ...i, canEdit: canModify(membership, i.user_id, userId) })));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Server error" });
@@ -18,8 +21,9 @@ router.get("/", async (req, res) => {
 router.get("/total", async (req, res) => {
   const userId = req.user.userId;
   try {
+    const membership = await getPrimaryFamily(userId);
     const result = await prisma.income.aggregate({
-      where: { user_id: userId },
+      where: membership ? { familyId: membership.familyId } : { user_id: userId, familyId: null },
       _sum: { amount: true },
     });
     res.json({ totalIncome: result._sum.amount ?? 0 });
@@ -48,9 +52,11 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    const membership = await getPrimaryFamily(userId);
     const income = await prisma.income.create({
       data: {
         user_id: userId,
+        familyId: membership?.familyId ?? null,
         title,
         amount: parsedAmount,
         category,
@@ -87,8 +93,14 @@ router.put("/:incomeId", async (req, res) => {
   }
 
   try {
-    const existing = await prisma.income.findFirst({ where: { id: incomeId, user_id: userId } });
+    const membership = await getPrimaryFamily(userId);
+    const existing = await prisma.income.findFirst({
+      where: membership ? { id: incomeId, familyId: membership.familyId } : { id: incomeId, user_id: userId, familyId: null },
+    });
     if (!existing) return res.status(404).json({ message: "Income not found" });
+    if (!canModify(membership, existing.user_id, userId)) {
+      return res.status(403).json({ error: "Only the member who added this income, or a family admin, can edit it" });
+    }
 
     const income = await prisma.income.update({
       where: { id: incomeId },
@@ -113,8 +125,14 @@ router.delete("/:incomeId", async (req, res) => {
   const userId = req.user.userId;
   const incomeId = parseInt(req.params.incomeId);
   try {
-    const existing = await prisma.income.findFirst({ where: { id: incomeId, user_id: userId } });
+    const membership = await getPrimaryFamily(userId);
+    const existing = await prisma.income.findFirst({
+      where: membership ? { id: incomeId, familyId: membership.familyId } : { id: incomeId, user_id: userId, familyId: null },
+    });
     if (!existing) return res.status(404).json({ message: "Income not found" });
+    if (!canModify(membership, existing.user_id, userId)) {
+      return res.status(403).json({ error: "Only the member who added this income, or a family admin, can delete it" });
+    }
 
     await prisma.income.delete({ where: { id: incomeId } });
     res.json({ message: "Income deleted successfully" });

@@ -22,6 +22,7 @@ const Expenses = () => {
 
   const [editingExpense, setEditingExpense] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [addError, setAddError] = useState("");
 
   useEffect(() => {
     fetchExpenses();
@@ -48,6 +49,7 @@ const Expenses = () => {
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
+    setAddError("");
     try {
       await api.post("/expenses", {
         title, amount: parseFloat(amount), category, date, reference,
@@ -59,7 +61,7 @@ const Expenses = () => {
       fetchExpenses();
       fetchTotal();
     } catch (error) {
-      console.error("Error adding expense:", error);
+      setAddError(error.response?.data?.error || "Failed to add expense");
     }
   };
 
@@ -170,6 +172,12 @@ const Expenses = () => {
               </select>
             )}
           </div>
+          {addError && (
+            <div className="mb-4 p-3 rounded-[12px] text-sm font-medium text-rose-500" style={{ backgroundColor: "#FEF2F2" }}>
+              ⚠️ {addError}
+            </div>
+          )}
+
           <button type="submit" className="text-white py-2.5 px-6 rounded-[14px] font-bold text-sm transition-all"
             style={{ backgroundColor: "#EF4444" }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#DC2626"; }}
@@ -230,6 +238,7 @@ const Expenses = () => {
                     <th className="text-right text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Amount</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Date</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Category</th>
+                    <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Added By</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Reference</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3">Recurring</th>
                     <th className="text-center text-xs font-bold text-slate-400 uppercase tracking-wider p-3 rounded-r-[12px]">Actions</th>
@@ -246,6 +255,7 @@ const Expenses = () => {
                           {exp.category || "Uncategorized"}
                         </span>
                       </td>
+                      <td className="p-3 text-center text-sm text-slate-500">{exp.user?.name || "--"}</td>
                       <td className="p-3 text-center text-sm text-slate-400">{exp.reference || "--"}</td>
                       <td className="p-3 text-center">
                         {exp.is_recurring ? (
@@ -255,12 +265,16 @@ const Expenses = () => {
                         ) : <span className="text-slate-300">--</span>}
                       </td>
                       <td className="p-3 text-center space-x-2">
-                        <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
-                          style={{ backgroundColor: "#818CF8" }}
-                          onClick={() => openEdit(exp)}>Edit</button>
-                        <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
-                          style={{ backgroundColor: "#EF4444" }}
-                          onClick={() => handleDeleteExpense(exp.id)}>Delete</button>
+                        {exp.canEdit !== false && (
+                          <>
+                            <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
+                              style={{ backgroundColor: "#818CF8" }}
+                              onClick={() => openEdit(exp)}>Edit</button>
+                            <button className="text-xs font-bold py-1.5 px-3 rounded-[10px] text-white transition-all"
+                              style={{ backgroundColor: "#EF4444" }}
+                              onClick={() => handleDeleteExpense(exp.id)}>Delete</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}
